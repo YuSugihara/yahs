@@ -1,5 +1,28 @@
 # YaHS: yet another Hi-C scaffolding tool [![DOI](https://zenodo.org/badge/411044095.svg)](https://zenodo.org/badge/latestdoi/411044095)
 
+## Local Fork Addition: Forced Telomeric Ends
+This local fork adds `--force-telo-ends FILE`. YaHS still runs normal `telo_finder()` detection, including `--telo-motif` when provided, then adds the contig ends listed in the force file as telomeric ends. Forced ends are combined with normal detections; they do not replace them.
+
+The input file is a tab-delimited two-column text file. The first column is the contig name and the second column is the end label. Accepted end labels are `5`, `5p`, `left`, `3`, `3p`, `right`, and `both`.
+
+    ptg000001l    5
+    ptg000006l    3
+    ptg000007l    right
+    ptg000011l    left
+    ptg000013l    both
+
+Example run:
+
+    ./yahs \
+      --force-telo-ends forced_telomeric_ends.tsv \
+      -o Stapelia_yahs_depth_100_forced_telo \
+      Stapelia_hifi_linkprep_trim.hic.p_ctg.mean_depth_ge100.fa \
+      Stapelia_yahs_depth_100.valid_pairs.bam
+
+Example log check:
+
+    grep -i -E "forced telomeric|force-telo|telo" Stapelia_yahs_depth_100_forced_telo.log
+
 ## Overview
 YaHS is a scaffolding tool using Hi-C data. It relies on a new algothrim for contig joining detection which considers the topological distribution of Hi-C signals aiming to distingush real interaction signals from mapping nosies. YaHS has been tested in a wide range of genome assemblies. Compared to other Hi-C scaffolding tools, it usually generates more contiguous scaffolds - especially with a higher N90 and L90 statistics. It is also super fast - takes less than 5 minutes to reconstruct the human genome from an assembly of 5,483 contigs with ~45X Hi-C data. See the [poster](https://drive.google.com/file/d/1jPhSi1k4ROGb1OSfKDurFIUvn-x1G6Kg/view?usp=sharing) presented in the [Bioversity Genemics 2021 conference](https://www.darwintreeoflife.org/news_item/biodiversity-genomics-2021-sequencing-genomes-across-the-planet/) for more information.
 

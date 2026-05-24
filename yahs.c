@@ -706,6 +706,7 @@ static void print_help(FILE *fp_help, int is_long_help)
     fprintf(fp_help, "    --file-type   STR      input file type BED|BAM|PA5|BIN, file name extension is ignored if set\n");
     fprintf(fp_help, "    --read-length          read length (required for PA5 format input) [150]\n");
     fprintf(fp_help, "    --telo-motif  STR      telomeric sequence motif\n");
+    fprintf(fp_help, "    --force-telo-ends FILE force listed contig ends to be treated as telomeric\n");
     if (is_long_help) {
         fprintf(fp_help, "\n");
         fprintf(fp_help, "    --D-min-cells INT      minimum number of cells to calculate the distance threshold [30]\n");
@@ -743,12 +744,83 @@ static ko_longopt_t long_options[] = {
     { "print-telo-motifs", ko_no_argument, 313 },
     { "search-telo-ends",  ko_no_argument, 314 },
     { "convert-to-binary", ko_no_argument, 315 },
+    { "force-telo-ends",   ko_required_argument, 316 },
     { "help",              ko_no_argument, 'h' },
     { "version",           ko_no_argument, 'V' },
     { 0, 0, 0 }
 };
 
 typedef struct {size_t n, m; char **a;} cstr_v;
+
+static void apply_forced_telo_ends(const char *path, sdict_t *sdict, int8_t *telo_ends)
+{
+    iostream_t *fp;
+    char *line;
+    uint64_t forced, missing, invalid;
+
+    fprintf(stderr, "[I::%s] reading forced telomeric ends from %s\n", __func__, path);
+
+    fp = iostream_open(path);
+    if (fp == NULL) {
+        fprintf(stderr, "[E::%s] cannot open file %s for reading\n", __func__, path);
+        exit(EXIT_FAILURE);
+    }
+
+    forced = missing = invalid = 0;
+    while ((line = iostream_getline(fp)) != NULL) {
+        char *p;
+        char name[4096], end[4096];
+        uint32_t id;
+        int set_5, set_3;
+
+        p = line;
+        while (isspace(*p))
+            ++p;
+        if (*p == '\0' || *p == '#')
+            continue;
+
+        if (sscanf(p, "%4095s %4095s", name, end) < 2) {
+            fprintf(stderr, "[W::%s] invalid forced telomeric end record: %s\n", __func__, line);
+            ++invalid;
+            continue;
+        }
+
+        set_5 = set_3 = 0;
+        if (strcasecmp(end, "5") == 0 || strcasecmp(end, "5p") == 0 || strcasecmp(end, "left") == 0)
+            set_5 = 1;
+        else if (strcasecmp(end, "3") == 0 || strcasecmp(end, "3p") == 0 || strcasecmp(end, "right") == 0)
+            set_3 = 1;
+        else if (strcasecmp(end, "both") == 0)
+            set_5 = set_3 = 1;
+        else {
+            fprintf(stderr, "[W::%s] invalid end label for %s: %s\n", __func__, name, end);
+            ++invalid;
+            continue;
+        }
+
+        id = sd_get(sdict, name);
+        if (id == UINT32_MAX) {
+            fprintf(stderr, "[W::%s] contig not found: %s\n", __func__, name);
+            ++missing;
+            continue;
+        }
+
+        if (set_5) {
+            telo_ends[id << 1] = 1;
+            ++forced;
+            fprintf(stderr, "[I::%s] forced telomeric end: %s 5'-end\n", __func__, name);
+        }
+        if (set_3) {
+            telo_ends[id << 1 | 1] = 1;
+            ++forced;
+            fprintf(stderr, "[I::%s] forced telomeric end: %s 3'-end\n", __func__, name);
+        }
+    }
+
+    iostream_close(fp);
+    fprintf(stderr, "[I::%s] forced telomeric ends loaded: %llu; missing contigs: %llu; invalid records: %llu\n",
+            __func__, (unsigned long long) forced, (unsigned long long) missing, (unsigned long long) invalid);
+}
 
 int main(int argc, char *argv[])
 {
@@ -760,7 +832,7 @@ int main(int argc, char *argv[])
     liftrlimit();
     ys_realtime0 = realtime();
 
-    char *fa, *fai, *agp, *link_file, *out, *restr, *ecstr, *ext1, *ext2, *link_bin_file, *agp_final, *fa_final;
+    char *fa, *fai, *agp, *link_file, *out, *restr, *ecstr, *ext1, *ext2, *link_bin_file, *agp_final, *fa_final, *force_telo_ends;
     int *resolutions, nr, rr, mq, ml, rl;
     int no_contig_ec, no_scaffold_ec, no_mem_check, d_min_cell, print_telomotifs, search_teloends, convert_binary;
     int8_t *telo_ends;
@@ -774,7 +846,7 @@ int main(int argc, char *argv[])
     int c, ret, is_long_help;
     FILE *fp_help = stderr;
     ret = 0;
-    fa = fai = agp = link_file = out = restr = link_bin_file = agp_final = fa_final = 0;
+    fa = fai = agp = link_file = out = restr = link_bin_file = agp_final = fa_final = force_telo_ends = 0;
     no_contig_ec = no_scaffold_ec = no_mem_check = 0;
     resolutions = 0;
     telo_ends = 0;
@@ -858,6 +930,8 @@ int main(int argc, char *argv[])
             search_teloends = 1;
         } else if (c == 315) {
             convert_binary = 1;
+        } else if (c == 316) {
+            force_telo_ends = opt.arg;
         } else if (c == 'v') {
             VERBOSE = atoi(opt.arg);
         } else if (c == 'V') {
@@ -1064,6 +1138,11 @@ int main(int argc, char *argv[])
     }
 
     telo_ends = telo_finder(fa, ml, NULL);
+    if (force_telo_ends) {
+        sdict_t *sdict = make_sdict_from_index(fai, ml);
+        apply_forced_telo_ends(force_telo_ends, sdict, telo_ends);
+        sd_destroy(sdict);
+    }
 
     if (f_type == BAM) {
         link_bin_file = malloc(strlen(out) + 5);
@@ -1179,4 +1258,3 @@ print_command:
 
     return ret;
 }
-
