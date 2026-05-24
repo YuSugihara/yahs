@@ -786,9 +786,9 @@ static void apply_forced_telo_ends(const char *path, sdict_t *sdict, int8_t *tel
         }
 
         set_5 = set_3 = 0;
-        if (strcasecmp(end, "5") == 0 || strcasecmp(end, "5p") == 0 || strcasecmp(end, "left") == 0)
+        if (strcasecmp(end, "5") == 0)
             set_5 = 1;
-        else if (strcasecmp(end, "3") == 0 || strcasecmp(end, "3p") == 0 || strcasecmp(end, "right") == 0)
+        else if (strcasecmp(end, "3") == 0)
             set_3 = 1;
         else if (strcasecmp(end, "both") == 0)
             set_5 = set_3 = 1;

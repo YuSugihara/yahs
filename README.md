@@ -3,12 +3,10 @@
 ## Local Fork Addition: Forced Telomeric Ends
 This local fork adds `--force-telo-ends FILE`. YaHS still runs normal `telo_finder()` detection, including `--telo-motif` when provided, then adds the contig ends listed in the force file as telomeric ends. Forced ends are combined with normal detections; they do not replace them.
 
-The input file is a tab-delimited two-column text file. The first column is the contig name and the second column is the end label. Accepted end labels are `5`, `5p`, `left`, `3`, `3p`, `right`, and `both`.
+The input file is a tab-delimited two-column text file. The first column is the contig name and the second column is the end label. Accepted end labels are `5`, `3`, and `both`.
 
     ptg000001l    5
     ptg000006l    3
-    ptg000007l    right
-    ptg000011l    left
     ptg000013l    both
 
 Example run:
